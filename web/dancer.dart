@@ -1,9 +1,12 @@
 import 'dart:typed_data';
 import 'dart:html';
 import 'dart:web_audio';
+import 'dart:math';
 
 CanvasRenderingContext2D dancer = null;
 CanvasElement canvas = null;
+HtmlElement status = null;
+var rand = new Random();
 
 var audioContext = new AudioContext();
 var audioInput = null,
@@ -21,6 +24,10 @@ int canvasHeight() {
   return window.innerHeight;
 }
 
+var lastTime = null;
+
+var colors = ["36, 179, 96", "204, 51, 51", "44,133,211", "156,0,233", "151,207,58", "250,105,0", "60,87,118"];
+
 void renderAudio(time) {
   var SPACING = 3;
   var BAR_WIDTH = 1;
@@ -35,9 +42,13 @@ void renderAudio(time) {
   analyserNode.getByteFrequencyData(freqByteData); 
 
   dancer.clearRect(0, 0, canvasWidth(), canvasHeight());
+  
   dancer.fillStyle = '#F6D565';
   dancer.lineCap = 'round';
   var multiplier = (analyserNode.frequencyBinCount / numBars).floor();
+  var avg = 0;
+  
+  var color = colors[rand.nextInt(colors.length)];
 
   // Draw rectangle for each frequency bin.
   for (var i = 0; i < numBars; ++i) {
@@ -49,14 +60,53 @@ void renderAudio(time) {
     
     magnitude = (magnitude / multiplier);
     
+    avg += magnitude;
+    
     // increase volatility of the bars
     if (magnitude > 0) {
-      magnitude += magnitude * 0.5;
+      magnitude += magnitude * 1.5;
     }
     
     var magnitude2 = freqByteData[i * multiplier];
-    dancer.fillStyle = "hsl( 240, 100%, 50%)";
+    
+    dancer.fillStyle = "rgba($color,.75)";
     dancer.fillRect(i * SPACING, canvasHeight(), BAR_WIDTH, -magnitude);
+  }
+  
+  if (lastTime == null) {
+    lastTime = time;
+  } else {
+    if (time - lastTime > 450) {
+      lastTime = time;
+      
+      avg = (avg / numBars);
+      
+      String msg;
+      
+      print(avg);
+      
+      status = querySelector("h1");
+      
+      if (avg < 40) {
+        status.style.color = 'rgba(255,255,255,.65)';
+        msg = "Turn the music back on";
+      } else if (avg < 100) {
+        var color = colors[0];
+        status.style.color = 'rgba($color,.65)';
+        msg = "Aite now we bumpin'";
+      } else if (avg < 150) {
+        var color = colors[1];
+        status.style.color = 'rgba($color, .65)';
+        msg  = "Yeah let's fucking rage";
+      } else {
+        var color = colors[1];
+        status.style.color = 'rgba($color, .65)';
+        msg  = "JAKE JAKE JAKE JAKE JAKE";
+      }
+      
+      status.text = msg; 
+
+    }
   }
   
   window.requestAnimationFrame(renderAudio);
