@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'dart:html';
 import 'dart:web_audio';
 import 'dart:math';
+import 'dart:async';
 
 CanvasRenderingContext2D dancer = null;
 CanvasElement canvas = null;
@@ -12,6 +13,9 @@ var audioContext = new AudioContext();
 var audioInput = null,
     realAudioInput = null,
     inputPoint = null;
+
+String type;
+WebSocket ws;
 
 var zeroGain = null,
     analyserNode = null;
@@ -28,9 +32,35 @@ var lastTime = null;
 
 var colors = ["36, 179, 96", "204, 51, 51", "44,133,211", "156,0,233", "151,207,58", "250,105,0", "60,87,118"];
 
+// alternate red/blue colors
+var flasher = false;
+
+void flashAlert() {
+  if (flasher) {
+    dancer.fillStyle = "#4994B6";
+  } else {
+    dancer.fillStyle = "#FC0C4C";
+  }
+  
+  flasher = !flasher;
+  
+  dancer.fillRect(0, 0, canvasWidth(), canvasHeight());
+}
+
 void renderAudio(time) {
   var SPACING = 3;
   var BAR_WIDTH = 1;
+  
+  if (type == "alert") {
+    flashAlert();
+    var timer = new Timer(const Duration(milliseconds: 100), () {
+      renderAudio(0);
+    });
+    
+    status.text = "QUIET QUIET QUIET";
+
+    return;
+  }
   
   // resize canvas to fit window
   dancer.canvas.width = canvasWidth();
@@ -70,7 +100,17 @@ void renderAudio(time) {
     var magnitude2 = freqByteData[i * multiplier];
     
     dancer.fillStyle = "rgba($color,.75)";
-    dancer.fillRect(i * SPACING, canvasHeight(), BAR_WIDTH, -magnitude);
+    
+    if (type == "bars") {
+      dancer.fillRect(i * SPACING, canvasHeight(), BAR_WIDTH, -magnitude); 
+    } else {
+      var x = 10 + rand.nextInt(canvasWidth() - 10);
+      
+      dancer.beginPath();
+      dancer.arc(x, canvasHeight() - i * 1.4, (magnitude / 15).round(), 0, PI * 2, true);
+      dancer.closePath();
+      dancer.fill(); 
+    }
   }
   
   if (lastTime == null) {
@@ -82,8 +122,6 @@ void renderAudio(time) {
       avg = (avg / numBars);
       
       String msg;
-      
-      print(avg);
       
       status = querySelector("h1");
       
@@ -101,7 +139,7 @@ void renderAudio(time) {
       } else {
         var color = colors[1];
         status.style.color = 'rgba($color, .65)';
-        msg  = "JAKE JAKE JAKE JAKE JAKE";
+        msg  = "OH SHIT DAWG";
       }
       
       status.text = msg; 
@@ -110,6 +148,31 @@ void renderAudio(time) {
   }
   
   window.requestAnimationFrame(renderAudio);
+}
+
+var WS_URL = "";
+
+void initSocket() {
+  ws = new WebSocket('ws://' + WS_URL + '/ws');
+  var data = "";
+  
+  ws.onOpen.listen((e) {
+    print('Connected');
+    ws.send('Hello from Dart!');
+  });
+
+  ws.onClose.listen((e) {
+    print('Websocket closed');
+  });
+
+  ws.onError.listen((e) {
+    print("Error connecting to ws");
+  });
+
+  ws.onMessage.listen((MessageEvent e) {
+    type = e.data;
+    print('Received message: ${e.data}');
+  });
 }
 
 void handleStream(stream) {
@@ -136,6 +199,8 @@ void handleStream(stream) {
 void main() {
   canvas = querySelector("#dancer");
   dancer = canvas.getContext("2d");
+  
+  initSocket();
   
   window.navigator.getUserMedia(audio: true).then(handleStream);
 }
